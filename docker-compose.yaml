@@ -1,0 +1,37 @@
+version: '3.3'
+
+services:
+   db:
+     image: mariadb:latest
+     ports:
+       - "3306:3306"
+     volumes:
+       - db_data:/var/lib/mysql
+     restart: always
+     environment:
+       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+       MYSQL_DATABASE: ${DB_NAME}
+       MYSQL_USER: ${DB_USER}
+       MYSQL_PASSWORD: ${DB_PASSWORD}
+
+   wordpress:
+     depends_on:
+       - db
+     build: dev/docker
+     user: ${UID}:${GID}
+     ports:
+       - "3000:80"
+     restart: always
+     environment:
+       WORDPRESS_DB_HOST: db:3306
+       WORDPRESS_DB_USER: ${DB_USER}
+       WORDPRESS_DB_PASSWORD: ${DB_PASSWORD}
+       WORDPRESS_DB_NAME: ${DB_NAME}
+       UPLOAD_LIMIT: 64M
+     volumes:
+       - ./dev/wordpress:/var/www/html
+       - ./src:/var/www/html/wp-content/plugins/seattlemakers-discord-plugin
+
+volumes:
+    db_data: {}
+    plugins: {}
