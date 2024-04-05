@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: Seattle Makers Discord Sync
-Plugin URI: http://github.com/seattlemakers/discord-plugin
+Plugin URI: http://github.com/seattlemakers/wordpress-discord-plugin
 Description: Synchronizes Seattle Makers membership roles with Discord roles
 Version: 0.1.0
 Author: Jacob Buys
