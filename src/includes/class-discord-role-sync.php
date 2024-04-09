@@ -181,6 +181,7 @@ class Discord_Role_Sync
         }
         wp_insert_post(array(
             'post_title' => 'Discord',
+            'post_slug' => self::PAGE_NAME,
             'post_content' => $this->render_template("default-discord-page"),
             'post_status' => 'publish',
             'post_type' => 'page'
