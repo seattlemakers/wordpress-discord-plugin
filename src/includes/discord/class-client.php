@@ -1,21 +1,7 @@
 <?php
 namespace SeattleMakers\Discord;
 
-require 'class-oauth-url.php';
-
 use Exception;
-
-class NoAuthException extends Exception
-{
-}
-
-class PostException extends Exception
-{
-}
-
-class RefreshException extends Exception
-{
-}
 
 class Client
 {
@@ -52,34 +38,38 @@ class Client
     }
 
     /**
-     * @throws PostException
-     * @throws NoAuthException
-     * @throws RefreshException
+     * @throws Post_Exception
+     * @throws No_Auth_Exception
+     * @throws Refresh_Exception
      */
     public function update_role_connection($user_id, $metadata)
     {
         $auth = $this->authenticate($user_id);
 
         $response = wp_remote_post($this->base_url . '/users/@me/applications/' . $this->discord_client_id . '/role-connection', [
-            'method' => 'POST',
+            'method' => 'PUT',
             'headers' => [
                 'Content-Type' => 'application/json',
                 'Authorization' => 'Bearer ' . $auth->access_token
             ],
-            'body' => json_encode($metadata),
+            'body' => json_encode(array(
+                "platform_name" => "Seattle Makers",
+                "platform_username" => $user_id,
+                "metadata" => $metadata,
+            )),
         ]);
 
         if (is_wp_error($response)) {
-            throw new PostException($response->get_error_message());
+            throw new Post_Exception($response->get_error_message());
         }
 
         return json_decode(wp_remote_retrieve_body($response));
     }
 
     /**
-     * @throws PostException
-     * @throws NoAuthException
-     * @throws RefreshException
+     * @throws Post_Exception
+     * @throws No_Auth_Exception
+     * @throws Refresh_Exception
      */
     public function get_user($user_id)
     {
@@ -94,21 +84,22 @@ class Client
         ]);
 
         if (is_wp_error($response)) {
-            throw new PostException($response->get_error_message());
+            throw new Post_Exception($response->get_error_message());
         }
 
         return json_decode(wp_remote_retrieve_body($response));
     }
 
     /**
-     * @throws RefreshException
-     * @throws NoAuthException
+     * @throws Refresh_Exception
+     * @throws No_Auth_Exception
      */
     private function authenticate($user_id): Tokens
     {
         $tokens = $this->tokenStore->get($user_id);
-        if (!$tokens) {
-            throw new NoAuthException();
+        error_log(print_r($tokens, true));
+        if (!$tokens || !isset($tokens->refresh_token)) {
+            throw new No_Auth_Exception();
         }
         if ($tokens->expires_at <= time()) {
             $this->refresh_tokens($tokens);
@@ -118,7 +109,7 @@ class Client
     }
 
     /**
-     * @throws RefreshException
+     * @throws Refresh_Exception
      */
     private function refresh_tokens(Tokens $tokens): void
     {
@@ -136,7 +127,7 @@ class Client
         ]);
 
         if (is_wp_error($response)) {
-            throw new RefreshException($response->get_error_message());
+            throw new Refresh_Exception($response->get_error_message());
         }
 
         $body = json_decode(wp_remote_retrieve_body($response));

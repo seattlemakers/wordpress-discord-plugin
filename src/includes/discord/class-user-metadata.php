@@ -2,7 +2,7 @@
 
 namespace SeattleMakers\Discord;
 
-class UserMetadata
+class User_Metadata
 {
     public $member = false;
     public $staff = false;

@@ -1,4 +1,6 @@
 FROM wordpress:latest
-COPY xhprof.ini $PHP_INI_DIR/conf.d/xhprof.ini
 RUN pecl install xhprof-2.3.9 \
-	&& docker-php-ext-enable xhprof \
+	&& pecl install xdebug \
+	&& docker-php-ext-enable xhprof xdebug
+
+COPY conf.d/* $PHP_INI_DIR/conf.d/

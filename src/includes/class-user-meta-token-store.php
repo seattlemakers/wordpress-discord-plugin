@@ -2,8 +2,6 @@
 
 namespace SeattleMakers;
 
-require_once 'discord/class-token-store.php';
-
 class User_Meta_Token_Store implements Discord\Token_Store
 {
     const META_KEY = "discord_tokens";

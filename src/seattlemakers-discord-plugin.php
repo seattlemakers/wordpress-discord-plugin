@@ -12,6 +12,32 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-require_once 'includes/class-discord-role-sync.php';
+/**
+ * Plugin Name: My Plugin
+ * ...
+ */
+
+spl_autoload_register(function ($class) {
+    $prefix = 'SeattleMakers\\';
+
+    if (!str_starts_with($class, $prefix)) {
+        return;
+    }
+
+    $relative_class = substr($class, strlen($prefix));
+
+    $relative_class_path = strtolower(str_replace('\\', '/', str_replace('_', '-', $relative_class)));
+    $dir = dirname($relative_class_path);
+    if ($dir === ".") {
+        $dir = "";
+    } else {
+        $dir = $dir . "/";
+    }
+    $file = sprintf("%sincludes/%sclass-%s.php", plugin_dir_path(__FILE__), $dir, basename($relative_class_path));
+
+    if (file_exists($file)) {
+        require_once $file;
+    }
+});
 
 new SeattleMakers\Discord_Role_Sync(__FILE__);

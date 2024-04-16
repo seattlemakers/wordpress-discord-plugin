@@ -28,6 +28,7 @@ services:
        WORDPRESS_DB_PASSWORD: ${DB_PASSWORD}
        WORDPRESS_DB_NAME: ${DB_NAME}
        UPLOAD_LIMIT: 64M
+       XDEBUG_CONFIG: remote_host=172.21.0.1
      volumes:
        - ./dev/wordpress:/var/www/html
        - ./src:/var/www/html/wp-content/plugins/seattlemakers-discord-plugin
