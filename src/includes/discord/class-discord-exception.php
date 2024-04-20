@@ -4,6 +4,6 @@ namespace SeattleMakers\Discord;
 
 use Exception;
 
-class Post_Exception extends Exception
+class Discord_Exception extends Exception
 {
 }

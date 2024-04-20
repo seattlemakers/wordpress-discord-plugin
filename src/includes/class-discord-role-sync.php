@@ -3,6 +3,7 @@
 namespace SeattleMakers;
 
 use Exception;
+use JetBrains\PhpStorm\NoReturn;
 use SeattleMakers\Discord\No_Auth_Exception;
 
 class Discord_Role_Sync
@@ -10,6 +11,7 @@ class Discord_Role_Sync
     private const QUERY_VAR = 'sm_discord';
     private const PAGE_NAME = "discord";
 
+    public const DISCORD_SERVER_ID_KEY = 'discord_server_id';
     public const DISCORD_CLIENT_ID_KEY = 'discord_client_id';
     public const DISCORD_CLIENT_SECRET_KEY = 'discord_client_secret';
 
@@ -30,7 +32,7 @@ class Discord_Role_Sync
         add_action('admin_init', array($this, 'admin_init'));
 
         add_filter('query_vars', array($this, 'add_query_vars'));
-        add_action('template_redirect', array($this, 'handle_oauth_callback'));
+        add_action('template_redirect', array($this, 'handle_discord_action'));
 
         add_shortcode('discord_link', array($this, 'render_discord_link'));
 
@@ -53,7 +55,19 @@ class Discord_Role_Sync
             'general'
         );
 
-        register_setting("general", "discord_client_id");
+        register_setting("general", self::DISCORD_SERVER_ID_KEY);
+        add_settings_field(
+            self::DISCORD_SERVER_ID_KEY,
+            'Discord Server ID',
+            function () {
+                $setting = get_option(self::DISCORD_SERVER_ID_KEY);
+                echo '<input type="text" name="' . self::DISCORD_SERVER_ID_KEY . '" value="' . (isset($setting) ? esc_attr($setting) : '') . '">';
+            },
+            'general',
+            'discord_role_sync'
+        );
+
+        register_setting("general", self::DISCORD_CLIENT_ID_KEY);
         add_settings_field(
             self::DISCORD_CLIENT_ID_KEY,
             'Discord Client ID',
@@ -65,7 +79,7 @@ class Discord_Role_Sync
             'discord_role_sync'
         );
 
-        register_setting("general", "discord_client_secret");
+        register_setting("general", self::DISCORD_CLIENT_SECRET_KEY);
         add_settings_field(
             self::DISCORD_CLIENT_SECRET_KEY,
             'Discord Client Secret',
@@ -93,8 +107,8 @@ class Discord_Role_Sync
     public function add_rewrite_rule(): void
     {
         add_rewrite_rule(
-            sprintf("^%s/callback$", self::PAGE_NAME),
-            sprintf("index.php?pagename=%s&%s=callback", self::PAGE_NAME, self::QUERY_VAR),
+            sprintf("^%s/(\w+)/?$", self::PAGE_NAME),
+            sprintf('index.php?pagename=%s&%s=$matches[1]', self::PAGE_NAME, self::QUERY_VAR),
             'top'
         );
     }
@@ -139,30 +153,40 @@ class Discord_Role_Sync
         $user_id = wp_get_current_user()->ID;
         try {
             $user = $this->discord()->get_user($user_id);
-
-            return $this->render_template("discord-link-connected", compact('user'));
-        } catch (Discord\No_Auth_Exception | Discord\Refresh_Exception) {
+            return $this->render_template("discord-link-connected", array(
+                'user' => $user,
+                'server_id' => get_option(self::DISCORD_SERVER_ID_KEY)
+            ));
+        } catch (Discord\No_Auth_Exception|Discord\Refresh_Exception) {
             $oauth = $this->discord()->oauth_url();
             $this->save_oauth_state($user_id, $oauth->state);
 
-            return $this->render_template("discord-link-disconnected", compact('oauth'));
-        } catch (Discord\Post_Exception $e) {
-            return $this->render_template("discord-link-error");
+            return $this->render_template("discord-link-disconnected", array("oauth" => $oauth));
+        } catch (Discord\Discord_Exception $e) {
+            return $this->render_template("discord-link-error", array("error" => $e->getMessage()));
         }
     }
 
-    public function handle_oauth_callback(): void
+    public function handle_discord_action(): void
     {
         global $wp_query;
         if (!isset($wp_query->query_vars[self::QUERY_VAR])) {
             return;
         }
-
         $action = $wp_query->query_vars[self::QUERY_VAR];
-        if ('callback' != $action) {
-            return;
-        }
 
+        switch ($action) {
+            case 'unlink':
+                $this->handle_unlink();
+                break;
+            case 'callback':
+                $this->handle_oauth_callback();
+                break;
+        }
+    }
+
+    private function handle_oauth_callback(): void
+    {
         if (!is_user_logged_in()) {
             auth_redirect();
         }
@@ -179,18 +203,34 @@ class Discord_Role_Sync
         $code = $_GET["code"];
 
         $saved_state = $this->get_oauth_state($user_id);
-        error_log(print_r(array("state" => $state, "saved_state"=>$saved_state), true));
         if ($state != $saved_state) {
             wp_trigger_error(__METHOD__, "Failed to authorize with discord: callback state didn't match.");
         }
 
-        $this->discord()->exchange_oauth_code($user_id, $code);
-        $this->clear_oauth_state($user_id);
+        try {
+            $this->discord()->exchange_oauth_code($user_id, $code);
+            $this->clear_oauth_state($user_id);
 
-        $this->user_metadata_provider->user_changed($user_id);
-        $this->flush_updates();
+            $this->user_metadata_provider->user_changed($user_id);
+            $this->flush_updates();
+        } catch (Exception $ex) {
+            wp_trigger_error(__METHOD__, "Failed to authorize with discord: " . $ex->getMessage());
+        }
 
-        wp_redirect("/discord");
+        wp_redirect("/" . self::PAGE_NAME);
+        exit;
+    }
+
+    private function handle_unlink(): void
+    {
+        if (!is_user_logged_in()) {
+            auth_redirect();
+        }
+        $user_id = wp_get_current_user()->ID;
+
+        $this->discord()->forget($user_id);
+
+        wp_redirect("/" . self::PAGE_NAME);
         exit;
     }
 
@@ -249,4 +289,5 @@ class Discord_Role_Sync
     {
         return get_user_meta($user_id, "discord_oauth_state", true);
     }
+
 }

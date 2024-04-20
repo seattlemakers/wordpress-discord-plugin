@@ -38,7 +38,7 @@ class Client
     }
 
     /**
-     * @throws Post_Exception
+     * @throws Discord_Exception
      * @throws No_Auth_Exception
      * @throws Refresh_Exception
      */
@@ -60,14 +60,14 @@ class Client
         ]);
 
         if (is_wp_error($response)) {
-            throw new Post_Exception($response->get_error_message());
+            throw new Discord_Exception($response->get_error_message());
         }
 
         return json_decode(wp_remote_retrieve_body($response));
     }
 
     /**
-     * @throws Post_Exception
+     * @throws Discord_Exception
      * @throws No_Auth_Exception
      * @throws Refresh_Exception
      */
@@ -84,7 +84,7 @@ class Client
         ]);
 
         if (is_wp_error($response)) {
-            throw new Post_Exception($response->get_error_message());
+            throw new Discord_Exception($response->get_error_message());
         }
 
         return json_decode(wp_remote_retrieve_body($response));
@@ -159,5 +159,44 @@ class Client
         $tokens = (new Tokens())->update($body);
         $this->tokenStore->set($userId, $tokens);
         return $tokens;
+    }
+
+    /**
+     * @throws Refresh_Exception
+     * @throws Discord_Exception
+     * @throws No_Auth_Exception
+     */
+    public function join_server(int $user_id, int $server_id, string $nick)
+    {
+        $auth = $this->authenticate($user_id);
+        $user = $this->get_user($user_id);
+
+        $response = wp_remote_post(sprintf("%s/guilds/%d/members/%d", $this->base_url, $server_id, $user->id), [
+            'method' => 'PUT',
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'Authorization' => 'Bearer ' . $this->discord_client_secret
+            ],
+            'body' => json_encode(array(
+                'access_token' => $auth->access_token,
+                'nick' => $nick,
+            )),
+        ]);
+
+        if (is_wp_error($response)) {
+            throw new Discord_Exception($response->get_error_message());
+        }
+
+        $status_code = wp_remote_retrieve_response_code($response);
+        if ($status_code == 204) {
+            return false;
+        }
+
+        return json_decode(wp_remote_retrieve_body($response));
+    }
+
+    public function forget(int $user_id): void
+    {
+        $this->tokenStore->clear($user_id);
     }
 }
