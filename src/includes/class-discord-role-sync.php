@@ -136,10 +136,9 @@ class Discord_Role_Sync
     {
         foreach ($this->user_metadata_provider->flush() as $user_id => $metadata) {
             try {
-                $resp = $this->discord()->update_role_connection($user_id, $metadata);
-                error_log(print_r($resp, true));
+                $this->discord()->update_role_connection($user_id, $metadata);
             } catch (Exception $e) {
-                error_log(print_r($e, true));
+                error_log(sprintf("Failed to update role connection for %s: %s", $user_id, $e->getMessage()));
             }
         }
     }

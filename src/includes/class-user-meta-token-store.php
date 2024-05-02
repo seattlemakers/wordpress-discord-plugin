@@ -9,7 +9,6 @@ class User_Meta_Token_Store implements Discord\Token_Store
     public function get(int $user_id): Discord\Tokens|false
     {
         $meta = get_user_meta($user_id, self::META_KEY, true);
-        error_log(print_r($meta, true));
         if (empty($meta)) {
             return false;
         }

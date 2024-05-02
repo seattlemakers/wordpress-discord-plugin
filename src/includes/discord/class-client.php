@@ -97,7 +97,6 @@ class Client
     private function authenticate($user_id): Tokens
     {
         $tokens = $this->tokenStore->get($user_id);
-        error_log(print_r($tokens, true));
         if (!$tokens || !isset($tokens->refresh_token)) {
             throw new No_Auth_Exception();
         }
