@@ -10,10 +10,14 @@ class Tokens
     public array $scopes;
     public string|null $discord_user_id;
 
-    public function __construct()
+    public function __construct($body = false)
     {
         $this->discord_user_id = null;
         $this->scopes = array();
+
+        if ($body) {
+            $this->update($body);
+        }
     }
 
     public function update($body): Tokens

@@ -2,7 +2,7 @@
 
 namespace SeattleMakers\Discord;
 
-use Exception;
+use http\Exception\RuntimeException;
 
 class Client
 {
@@ -33,14 +33,14 @@ class Client
     {
         $state = bin2hex(random_bytes(16));
 
-        $url = $this->base_url . '/oauth2/authorize?' . http_build_query(array(
+        $url = $this->base_url . '/oauth2/authorize?' . http_build_query([
                 'client_id' => $this->discord_client_id,
                 'redirect_uri' => $this->discord_oauth_redirect_url,
                 'response_type' => 'code',
                 'state' => $state,
                 'scope' => 'guilds.join role_connections.write identify',
                 'prompt' => 'consent',
-            ));
+            ]);
 
         return new OAuth_URL($state, $url);
     }
@@ -52,24 +52,22 @@ class Client
     {
         $auth = $this->authenticate($user_id);
 
-        $response = wp_remote_request($this->base_url . '/users/@me/applications/' . $this->discord_client_id . '/role-connection', [
-            'method' => 'PUT',
-            'headers' => [
-                'Content-Type' => 'application/json',
-                'Authorization' => 'Bearer ' . $auth->access_token
-            ],
-            'body' => json_encode(array(
+        $body = $this->request(
+            'PUT',
+            '/users/@me/applications/' . $this->discord_client_id . '/role-connection',
+            headers: ['Authorization' => 'Bearer ' . $auth->access_token],
+            body: json_encode([
                 "platform_name" => "Seattle Makers",
                 "platform_username" => $user_id,
                 "metadata" => $metadata,
-            )),
-        ]);
+            ])
+        );
 
-        if (is_wp_error($response)) {
-            throw new Discord_Exception($response->get_error_message());
+        if (!$body) {
+            return false;
         }
 
-        return json_decode(wp_remote_retrieve_body($response));
+        return json_decode($body);
     }
 
     /**
@@ -94,103 +92,101 @@ class Client
 
     private function refresh_tokens(Tokens $tokens): void
     {
-        $response = wp_remote_request($this->base_url . '/oauth2/token', [
-            'method' => 'POST',
-            'headers' => ['Content-Type' => 'application/x-www-form-urlencoded',],
-            'body' => [
+        $body = $this->request(
+            'POST', '/oauth2/token',
+            headers: ['Content-Type' => 'application/x-www-form-urlencoded'],
+            body: [
                 'client_id' => $this->discord_client_id,
                 'client_secret' => $this->discord_client_secret,
                 'grant_type' => 'refresh_token',
                 'refresh_token' => $tokens->refresh_token,
-            ],
-        ]);
+            ]
+        );
 
-        if (is_wp_error($response)) {
-            throw new Refresh_Exception($response->get_error_message());
+        if (!$body) {
+            return;
         }
 
-        $this->handle_response_error($response);
-
-        $body = json_decode(wp_remote_retrieve_body($response));
-        $tokens->update($body);
+        $object = json_decode($body);
+        $tokens->update($object);
     }
 
-    private function handle_response_error(array $response): void
+    private function request(string $method, string $path, $headers = [], $body = null): string|false
     {
-        $status = $response['response']['code'];
-        if ($status >= 400) {
-            $message = $response['response']['message'];
-            $body = wp_remote_retrieve_body($response);
-            throw new Discord_Exception(sprintf("HTTP %d: (%s), body: %s", $status, $message, $body));
+        $args = [
+            'method' => $method,
+            'headers' => array_merge([
+                'Content-Type' => 'application/json',
+            ], $headers),
+        ];
+        if ($body) {
+            $args['body'] = $body;
         }
+
+        $response = wp_remote_request($this->base_url . $path, $args);
+        if (is_wp_error($response)) {
+            // TODO: handle this with a typed exception?
+            throw new RuntimeException($response->get_error_message());
+        }
+        $response_body = wp_remote_retrieve_body($response);
+        $http_status = wp_remote_retrieve_response_code($response);
+
+        if ($http_status < 400) {
+            return $response_body;
+        }
+
+        if ($http_status == 404) {
+            return false;
+        }
+
+        $http_status_message = wp_remote_retrieve_response_message($response);
+        throw new Discord_Exception(sprintf("HTTP %d (%s): %s", $http_status, $http_status_message, $response_body));
     }
 
     private function update_authorization(Tokens $tokens): void
     {
-        $response = wp_remote_request($this->base_url . '/oauth2/@me', [
-            'method' => 'GET',
-            'headers' => [
-                'Content-Type' => 'application/json',
-                'Authorization' => 'Bearer ' . $tokens->access_token
-            ],
-        ]);
+        $body = $this->request('GET', '/oauth2/@me',
+            headers: ['Authorization' => 'Bearer ' . $tokens->access_token]
+        );
 
-        if (is_wp_error($response)) {
-            throw new Discord_Exception($response->get_error_message());
+        if (!$body) {
+            throw new Discord_Exception('Failed to get authorization');
         }
 
-        // TODO: check $response['response']['code'] for 401 from discord and re-auth.
-
-
-        $auth = new Authorization(json_decode(wp_remote_retrieve_body($response)));
+        $auth = new Authorization(json_decode($body));
         $tokens->update_authorization($auth);
     }
 
     /**
      * @throws No_Auth_Exception
      */
-    public function get_user($user_id): User
+    public function get_user($user_id): User|false
     {
         $auth = $this->authenticate($user_id);
 
-        $response = wp_remote_request($this->base_url . '/users/@me', [
-            'method' => 'GET',
-            'headers' => [
-                'Content-Type' => 'application/json',
-                'Authorization' => 'Bearer ' . $auth->access_token
-            ],
-        ]);
+        $body = $this->request('GET', '/users/@me',
+            ['Authorization' => 'Bearer ' . $auth->access_token]
+        );
 
-        if (is_wp_error($response)) {
-            throw new Discord_Exception($response->get_error_message());
+        if (!$body) {
+            return false;
         }
 
-        // TODO: check $response['response']['code'] for 401 from discord and re-auth.
-
-        return new User(json_decode(wp_remote_retrieve_body($response)));
+        return new User(json_decode($body));
     }
 
     public function get_membership($discord_user_id, $server_id)
     {
-        $response = wp_remote_request($this->base_url . '/guilds/' . $server_id . '/members/' . $discord_user_id, [
-            'method' => 'GET',
-            'headers' => [
-                'Content-Type' => 'application/json',
-                'Authorization' => 'Bot ' . $this->discord_bot_token
-            ],
-        ]);
+        $response = $this->request(
+            'GET', sprintf("/guilds/%s/members/%s", $server_id, $discord_user_id),
+            headers: ['Authorization' => 'Bot ' . $this->discord_bot_token]
+        );
 
-        if (is_wp_error($response)) {
-            throw new Discord_Exception($response->get_error_message());
-        }
-        if (wp_remote_retrieve_response_code($response) == 404) {
+        if (!$response) {
             return null;
         }
-        if (wp_remote_retrieve_response_code($response) >= 400) {
-            throw new Discord_Exception(wp_remote_retrieve_response_message($response) . " " . wp_remote_retrieve_body($response));
-        }
 
-        return json_decode(wp_remote_retrieve_body($response));
+        return json_decode($response);
     }
 
     /**
@@ -199,24 +195,23 @@ class Client
      */
     public function exchange_oauth_code($userId, $code): Tokens
     {
-        $response = wp_remote_request($this->base_url . '/oauth2/token', array(
-            'method' => 'POST',
-            'headers' => array('Content-Type' => 'application/x-www-form-urlencoded'),
-            'body' => array(
+        $body = $this->request(
+            'POST', '/oauth2/token',
+            headers: ['Content-Type' => 'application/x-www-form-urlencoded'],
+            body: [
                 'client_id' => $this->discord_client_id,
                 'client_secret' => $this->discord_client_secret,
                 'grant_type' => 'authorization_code',
                 'code' => $code,
                 'redirect_uri' => $this->discord_oauth_redirect_url,
-            )
-        ));
+            ]
+        );
 
-        if (is_wp_error($response)) {
-            throw new Exception('Error fetching OAuth tokens: ' . $response->get_error_message());
+        if (!$body) {
+            throw new Discord_Exception('Error fetching OAuth tokens');
         }
 
-        $body = json_decode(wp_remote_retrieve_body($response));
-        $tokens = (new Tokens())->update($body);
+        $tokens = new Tokens(json_decode($body));
         $this->tokenStore->set($userId, $tokens);
         return $tokens;
     }
@@ -228,28 +223,16 @@ class Client
     {
         $auth = $this->authenticate($user_id);
 
-        $response = wp_remote_request($this->base_url . '/guilds/' . $server_id . '/members/' . $auth->discord_user_id, array(
-            'method' => 'PUT',
-            'headers' => array(
-                'Content-Type' => 'application/json',
-                'Authorization' => 'Bot ' . $this->discord_bot_token,
-            ),
-            'body' => json_encode(array(
+        $response = $this->request(
+            'PUT', sprintf("/guilds/%s/members/%s", $server_id, $auth->discord_user_id),
+            headers: ['Authorization' => 'Bot ' . $this->discord_bot_token,],
+            body: json_encode([
                 'access_token' => $auth->access_token,
                 'nick' => $nick,
-            )),
-        ));
+            ])
+        );
 
-        if (is_wp_error($response)) {
-            throw new Discord_Exception($response->get_error_message());
-        }
-
-        $status_code = wp_remote_retrieve_response_code($response);
-        if ($status_code == 204) {
-            return false;
-        }
-
-        return json_decode(wp_remote_retrieve_body($response));
+        return json_decode($response);
     }
 
     public function forget(int $user_id): void
