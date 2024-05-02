@@ -162,7 +162,7 @@ class Discord_Role_Sync
     public function render_discord_link(): string|bool
     {
         if (!is_user_logged_in()) {
-            auth_redirect();
+            return $this->render_template("discord-link-logged-out", []);
         }
 
         $user_id = wp_get_current_user()->ID;
