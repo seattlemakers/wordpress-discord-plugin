@@ -4,7 +4,9 @@ namespace SeattleMakers;
 
 use Exception;
 use JetBrains\PhpStorm\NoReturn;
+use SeattleMakers\Discord\Discord_Exception;
 use SeattleMakers\Discord\No_Auth_Exception;
+use SeattleMakers\Discord\Refresh_Exception;
 
 class Discord_Role_Sync
 {
@@ -14,6 +16,7 @@ class Discord_Role_Sync
     public const DISCORD_SERVER_ID_KEY = 'discord_server_id';
     public const DISCORD_CLIENT_ID_KEY = 'discord_client_id';
     public const DISCORD_CLIENT_SECRET_KEY = 'discord_client_secret';
+    public const DISCORD_BOT_TOKEN_KEY = 'discord_bot_token';
 
     private Presspoint\User_Metadata_Provider $user_metadata_provider;
 
@@ -90,6 +93,18 @@ class Discord_Role_Sync
             'general',
             'discord_role_sync'
         );
+
+        register_setting("general", self::DISCORD_BOT_TOKEN_KEY);
+        add_settings_field(
+            self::DISCORD_BOT_TOKEN_KEY,
+            'Discord Bot Token',
+            function () {
+                $setting = get_option(self::DISCORD_BOT_TOKEN_KEY);
+                echo '<input type="password" name="' . self::DISCORD_BOT_TOKEN_KEY . '" value="' . (isset($setting) ? esc_attr($setting) : '') . '">';
+            },
+            'general',
+            'discord_role_sync'
+        );
     }
 
     public function activate(): void
@@ -125,6 +140,7 @@ class Discord_Role_Sync
             $this->discord = new Discord\Client(
                 get_option(self::DISCORD_CLIENT_ID_KEY),
                 get_option(self::DISCORD_CLIENT_SECRET_KEY),
+                get_option(self::DISCORD_BOT_TOKEN_KEY),
                 site_url(sprintf("/%s/callback", self::PAGE_NAME)),
                 new User_Meta_Token_Store()
             );
@@ -151,10 +167,17 @@ class Discord_Role_Sync
 
         $user_id = wp_get_current_user()->ID;
         try {
+            $server_id = get_option(self::DISCORD_SERVER_ID_KEY);
+            $roles = $this->user_metadata_provider->get_metadata($user_id)->to_list();
+
             $user = $this->discord()->get_user($user_id);
+            $membership = $this->discord()->get_membership($user->id, $server_id);
+
             return $this->render_template("discord-link-connected", array(
                 'user' => $user,
-                'server_id' => get_option(self::DISCORD_SERVER_ID_KEY)
+                'membership' => $membership,
+                'server_id' => $server_id,
+                'roles' => $roles,
             ));
         } catch (Discord\No_Auth_Exception|Discord\Refresh_Exception) {
             $oauth = $this->discord()->oauth_url();
@@ -175,6 +198,9 @@ class Discord_Role_Sync
         $action = $wp_query->query_vars[self::QUERY_VAR];
 
         switch ($action) {
+            case 'link':
+                $this->handle_link();
+                break;
             case 'unlink':
                 $this->handle_unlink();
                 break;
@@ -212,6 +238,25 @@ class Discord_Role_Sync
 
             $this->user_metadata_provider->user_changed($user_id);
             $this->flush_updates();
+        } catch (Exception $ex) {
+            wp_trigger_error(__METHOD__, "Failed to authorize with discord: " . $ex->getMessage());
+        }
+
+        wp_redirect("/" . self::PAGE_NAME . "/link");
+        exit;
+    }
+
+    private function handle_link(): void
+    {
+        if (!is_user_logged_in()) {
+            auth_redirect();
+        }
+        $user = wp_get_current_user();
+        $nick = $user->first_name . " " . substr($user->last_name, 0, 1);
+        $server_id = get_option(self::DISCORD_SERVER_ID_KEY);
+
+        try {
+            $this->discord()->join_server($user->ID, $server_id, $nick);
         } catch (Exception $ex) {
             wp_trigger_error(__METHOD__, "Failed to authorize with discord: " . $ex->getMessage());
         }
@@ -288,5 +333,6 @@ class Discord_Role_Sync
     {
         return get_user_meta($user_id, "discord_oauth_state", true);
     }
+
 
 }

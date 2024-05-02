@@ -7,6 +7,14 @@ class Tokens
     public int $expires_at;
     public string $access_token;
     public string $refresh_token;
+    public array $scopes;
+    public string|null $discord_user_id;
+
+    public function __construct()
+    {
+        $this->discord_user_id = null;
+        $this->scopes = array();
+    }
 
     public function update($body): Tokens
     {
@@ -15,7 +23,15 @@ class Tokens
         if (isset($body->refresh_token))
             $this->refresh_token = $body->refresh_token;
 
-        $this->expires_at = time() + $body->expires_in * 1000;
+        $this->expires_at = time() + $body->expires_in;
+
+        return $this;
+    }
+
+    public function update_authorization(Authorization $authorization): Tokens
+    {
+        $this->discord_user_id = $authorization->user->id;
+        $this->scopes = $authorization->scopes;
 
         return $this;
     }
