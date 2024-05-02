@@ -13,7 +13,7 @@ class Tokens
     public function __construct($body = false)
     {
         $this->discord_user_id = null;
-        $this->scopes = array();
+        $this->scopes = [];
 
         if ($body) {
             $this->update($body);
@@ -22,10 +22,12 @@ class Tokens
 
     public function update($body): Tokens
     {
-        if (isset($body->access_token))
+        if (isset($body->access_token)) {
             $this->access_token = $body->access_token;
-        if (isset($body->refresh_token))
+        }
+        if (isset($body->refresh_token)) {
             $this->refresh_token = $body->refresh_token;
+        }
 
         $this->expires_at = time() + $body->expires_in;
 

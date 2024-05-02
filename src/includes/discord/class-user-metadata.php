@@ -8,8 +8,9 @@ class User_Metadata
     public $staff = false;
     public $maketeer = false;
 
-    public function to_list(): array {
-        $list = array();
+    public function to_list(): array
+    {
+        $list = [];
         if ($this->member) {
             $list[] = "Member";
         }

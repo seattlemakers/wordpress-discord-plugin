@@ -1,1 +1,1 @@
-<p>In order to join our Discord server, you must have an account on this website. Please <a href="/account">log in</a>, or <a href="/sign-up">create a new account</a>.<p>
+    or <a href="/sign-up">create a new account</a>.<p>

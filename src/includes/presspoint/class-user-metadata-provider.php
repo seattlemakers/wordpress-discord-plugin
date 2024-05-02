@@ -1,6 +1,7 @@
 <?php
 
 namespace SeattleMakers\Presspoint;
+
 use SeattleMakers\Discord\User_Metadata;
 
 class User_Metadata_Provider
@@ -16,9 +17,9 @@ class User_Metadata_Provider
 
     public function __construct()
     {
-        $this->updated_users = array();
-        add_filter('update_user_metadata', array($this, 'hook_update_user_metadata'), 10, 3);
-        add_filter('update_post_metadata', array($this, 'hook_update_post_metadata'), 10, 3);
+        $this->updated_users = [];
+        add_filter('update_user_metadata', [$this, 'hook_update_user_metadata'], 10, 3);
+        add_filter('update_post_metadata', [$this, 'hook_update_post_metadata'], 10, 3);
     }
 
     public function get_metadata($user_id): User_Metadata
@@ -51,8 +52,9 @@ class User_Metadata_Provider
             'meta_value' => self::ACTIVE,
             'post_status' => 'any',
         ]);
-        if (count($active_plans) > 0)
+        if (count($active_plans) > 0) {
             $meta->member = true;
+        }
 
         return $meta;
     }
@@ -85,8 +87,9 @@ class User_Metadata_Provider
         $this->updated_users[$user_id] = true;
     }
 
-    public function flush(): array {
-        $metadata_updates = array();
+    public function flush(): array
+    {
+        $metadata_updates = [];
         foreach ($this->updated_users as $user_id => $updated) {
             if ($updated) {
                 $metadata_updates[$user_id] = $this->get_metadata($user_id);

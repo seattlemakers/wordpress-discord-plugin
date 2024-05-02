@@ -3,7 +3,10 @@
 namespace SeattleMakers\Discord;
 
 // https://discord.com/developers/docs/resources/user#user-object
-class User {
+use stdClass;
+
+class User
+{
     public string $id;
     public string $username;
     public string $discriminator;
@@ -23,7 +26,7 @@ class User {
     public ?string $avatar_decoration;
 
 
-    public function __construct(\stdClass $data)
+    public function __construct(stdClass $data)
     {
         $this->id = $data->id ?? null;
         $this->username = $data->username ?? null;
