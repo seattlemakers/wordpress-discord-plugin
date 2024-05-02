@@ -2,8 +2,8 @@
 
 namespace SeattleMakers\Discord;
 
-use Exception;
+use RuntimeException;
 
-class Discord_Exception extends Exception
+class Discord_Exception extends RuntimeException
 {
 }

@@ -2,8 +2,8 @@
 
 namespace SeattleMakers\Discord;
 
-use Exception;
+use RuntimeException;
 
-class Refresh_Exception extends Exception
+class Refresh_Exception extends RuntimeException
 {
 }
