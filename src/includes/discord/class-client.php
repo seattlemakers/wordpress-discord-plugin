@@ -189,6 +189,21 @@ class Client
         return json_decode($response);
     }
 
+    public function register_metadata(array $metadata)
+    {
+        $response = $this->request(
+            'PUT', sprintf("/applications/%s/role-connections/metadata", $this->discord_client_id),
+            headers: ['Authorization' => 'Bot ' . $this->discord_bot_token],
+            body: json_encode($metadata),
+        );
+
+        if (!$response) {
+            return null;
+        }
+
+        return json_decode($response);
+    }
+
     /**
      * Given an OAuth2 code from the scope approval page, make a request to Discord's
      * OAuth2 service to retrieve an access token, refresh token, and expiration.

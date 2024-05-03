@@ -3,6 +3,7 @@
 namespace SeattleMakers;
 
 use Exception;
+use SeattleMakers\Discord\User_Metadata;
 
 class Discord_Role_Sync
 {
@@ -18,9 +19,11 @@ class Discord_Role_Sync
 
     private ?Discord\Client $discord = null;
     private string $template_path;
+    private string $plugin_file;
 
     public function __construct(string $plugin_file_path)
     {
+        $this->plugin_file = basename(dirname($plugin_file_path)) . "/" . basename($plugin_file_path);
         $this->user_metadata_provider = new Presspoint\User_Metadata_Provider();
         $this->template_path = dirname($plugin_file_path) . "/templates";
 
@@ -29,6 +32,7 @@ class Discord_Role_Sync
 
         add_action('init', [$this, 'add_rewrite_rule']);
         add_action('admin_init', [$this, 'admin_init']);
+        add_action('admin_menu', [$this, 'admin_menu']);
 
         add_filter('query_vars', [$this, 'add_query_vars']);
         add_action('template_redirect', [$this, 'handle_discord_action']);
@@ -37,6 +41,17 @@ class Discord_Role_Sync
 
         add_action('wp_footer', [$this, 'flush_updates']);
         add_action('admin_footer', [$this, 'flush_updates']);
+
+        add_filter('plugin_action_links', [$this, 'add_plugin_action_links'], 10, 2);
+    }
+
+    public function add_plugin_action_links(array $links, string $file): array
+    {
+        if ($file == $this->plugin_file) {
+            $url = admin_url("options-general.php?page=discord-settings");
+            $links['discord_settings'] = "<a href='{$url}'>Settings</a>";
+        }
+        return $links;
     }
 
     public function admin_init(): void
@@ -46,15 +61,15 @@ class Discord_Role_Sync
         }
 
         add_settings_section(
-            'discord_role_sync',
-            'Discord Role Sync',
+            'discord_credentials',
+            'Credentials',
             function () {
                 echo '<p>Configure credentials for discord role sync</p>';
             },
-            'general'
+            'discord-settings'
         );
 
-        register_setting("general", self::DISCORD_SERVER_ID_KEY);
+        register_setting("discord_credentials", self::DISCORD_SERVER_ID_KEY);
         add_settings_field(
             self::DISCORD_SERVER_ID_KEY,
             'Discord Server ID',
@@ -62,11 +77,11 @@ class Discord_Role_Sync
                 $setting = get_option(self::DISCORD_SERVER_ID_KEY);
                 echo '<input type="text" name="' . self::DISCORD_SERVER_ID_KEY . '" value="' . (isset($setting) ? esc_attr($setting) : '') . '">';
             },
-            'general',
-            'discord_role_sync'
+            'discord-settings',
+            'discord_credentials'
         );
 
-        register_setting("general", self::DISCORD_CLIENT_ID_KEY);
+        register_setting("discord_credentials", self::DISCORD_CLIENT_ID_KEY);
         add_settings_field(
             self::DISCORD_CLIENT_ID_KEY,
             'Discord Client ID',
@@ -74,11 +89,11 @@ class Discord_Role_Sync
                 $setting = get_option(self::DISCORD_CLIENT_ID_KEY);
                 echo '<input type="text" name="' . self::DISCORD_CLIENT_ID_KEY . '" value="' . (isset($setting) ? esc_attr($setting) : '') . '">';
             },
-            'general',
-            'discord_role_sync'
+            'discord-settings',
+            'discord_credentials'
         );
 
-        register_setting("general", self::DISCORD_CLIENT_SECRET_KEY);
+        register_setting("discord_credentials", self::DISCORD_CLIENT_SECRET_KEY);
         add_settings_field(
             self::DISCORD_CLIENT_SECRET_KEY,
             'Discord Client Secret',
@@ -86,11 +101,11 @@ class Discord_Role_Sync
                 $setting = get_option(self::DISCORD_CLIENT_SECRET_KEY);
                 echo '<input type="password" name="' . self::DISCORD_CLIENT_SECRET_KEY . '" value="' . (isset($setting) ? esc_attr($setting) : '') . '">';
             },
-            'general',
-            'discord_role_sync'
+            'discord-settings',
+            'discord_credentials'
         );
 
-        register_setting("general", self::DISCORD_BOT_TOKEN_KEY);
+        register_setting("discord_credentials", self::DISCORD_BOT_TOKEN_KEY);
         add_settings_field(
             self::DISCORD_BOT_TOKEN_KEY,
             'Discord Bot Token',
@@ -98,9 +113,100 @@ class Discord_Role_Sync
                 $setting = get_option(self::DISCORD_BOT_TOKEN_KEY);
                 echo '<input type="password" name="' . self::DISCORD_BOT_TOKEN_KEY . '" value="' . (isset($setting) ? esc_attr($setting) : '') . '">';
             },
-            'general',
-            'discord_role_sync'
+            'discord-settings',
+            'discord_credentials'
         );
+    }
+
+    public function admin_menu(): void
+    {
+        add_options_page(
+            'Discord Sync Settings',
+            'Discord',
+            'manage_options',
+            'discord-settings',
+            function () {
+                ?>
+                <div class="wrap">
+                    <h1>Discord Role Sync Settings</h1>
+                    <form action="options.php" method="POST">
+                        <?php
+                        settings_fields('discord_credentials');
+                        do_settings_sections('discord-settings');
+                        submit_button();
+                        ?>
+                    </form>
+                    <h2>Register Role Connection Metadata</h2>
+                    <p>As a one-time setup, after configuring credentials, register metadata with Discord to link SM
+                        roles with Discord roles:</p>
+                    <form action="options-general.php?page=discord-settings" method="POST">
+                        <?php
+                        if (isset($_POST['register_metadata']) && check_admin_referer('register_metadata_clicked')) {
+                            try {
+                                $meta = $this->discord()->register_metadata(User_Metadata::SCHEMA);
+                                ?>
+                                <div class='notice success is-dismissible'><p><strong>Successfully registered metadata:</strong>
+                                    <pre><?php echo(print_r($meta, true)) ?></pre>
+                                    </p></div>
+                                <?php
+                            } catch (Exception $ex) {
+                                ?>
+                                <div class='notice error is-dismissible'><p><strong>Failed to register
+                                            metadata:</strong>
+                                    <pre><?php echo($ex->getMessage()) ?></pre>
+                                    </p></div>
+                                <?php
+                            }
+                        }
+                        wp_nonce_field('register_metadata_clicked');
+                        echo '<input type="hidden" value="true" name="register_metadata" />';
+                        submit_button("Register Metadata", other_attributes: !$this->is_configured() ? ["disabled" => true] : []);
+                        ?>
+                    </form>
+                </div>
+                <?php
+            }
+        );
+    }
+
+    private function is_configured(): bool
+    {
+        $options = [
+            self::DISCORD_CLIENT_ID_KEY,
+            self::DISCORD_CLIENT_SECRET_KEY,
+            self::DISCORD_BOT_TOKEN_KEY,
+        ];
+
+        foreach ($options as $option) {
+            if (!get_option($option) || trim(get_option($option)) === '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function discord(): Discord\Client
+    {
+        if ($this->discord == null) {
+            $this->discord = new Discord\Client(
+                get_option(self::DISCORD_CLIENT_ID_KEY),
+                get_option(self::DISCORD_CLIENT_SECRET_KEY),
+                get_option(self::DISCORD_BOT_TOKEN_KEY),
+                site_url($this->action_url("callback")),
+                new User_Meta_Token_Store()
+            );
+        }
+        return $this->discord;
+    }
+
+    /**
+     * @param string $action
+     * @return string
+     */
+    public function action_url(string $action): string
+    {
+        return sprintf("/%s/%s", self::PAGE_NAME, $action);
     }
 
     public function activate(): void
@@ -164,28 +270,44 @@ class Discord_Role_Sync
             return $this->render_template("discord-link-logged-out", []);
         }
 
-        $user_id = wp_get_current_user()->ID;
+        $user = wp_get_current_user();
+        $nick = $this->get_nick($user);
+        $roles = $this->user_metadata_provider->get_metadata($user->ID)->to_list();
+
         try {
             $server_id = get_option(self::DISCORD_SERVER_ID_KEY);
-            $roles = $this->user_metadata_provider->get_metadata($user_id)->to_list();
 
-            $user = $this->discord()->get_user($user_id);
-            $membership = $this->discord()->get_membership($user->id, $server_id);
+            $discord_user = $this->discord()->get_user($user->ID);
+            $membership = $this->discord()->get_membership($discord_user->id, $server_id);
 
             return $this->render_template("discord-link-connected", [
-                'user' => $user,
+                'user' => $discord_user,
                 'membership' => $membership,
                 'server_id' => $server_id,
+                'nick' => $nick,
                 'roles' => $roles,
             ]);
         } catch (Discord\No_Auth_Exception|Discord\Refresh_Exception) {
             $oauth = $this->discord()->oauth_url();
-            $this->save_oauth_state($user_id, $oauth->state);
+            $this->save_oauth_state($user->ID, $oauth->state);
 
-            return $this->render_template("discord-link-disconnected", ["oauth" => $oauth]);
+            return $this->render_template("discord-link-disconnected", [
+                "oauth" => $oauth,
+                'nick' => $nick,
+                'roles' => $roles,
+            ]);
         } catch (Discord\Discord_Exception $e) {
             return $this->render_template("discord-link-error", ["error" => $e->getMessage()]);
         }
+    }
+
+    /**
+     * @param \WP_User|null $user
+     * @return string
+     */
+    public function get_nick(?\WP_User $user): string
+    {
+        return sprintf("%s %s", $user->first_name, substr($user->last_name, 0, 1));
     }
 
     /**
@@ -225,7 +347,7 @@ class Discord_Role_Sync
             auth_redirect();
         }
         $user = wp_get_current_user();
-        $nick = $user->first_name . " " . substr($user->last_name, 0, 1);
+        $nick = $this->get_nick($user);
         $server_id = get_option(self::DISCORD_SERVER_ID_KEY);
 
         try {
@@ -234,8 +356,13 @@ class Discord_Role_Sync
             wp_trigger_error(__METHOD__, "Failed to authorize with discord: " . $ex->getMessage());
         }
 
-        wp_redirect("/" . self::PAGE_NAME);
+        wp_redirect($this->root_url());
         exit;
+    }
+
+    private function root_url(): string
+    {
+        return sprintf("/%s", self::PAGE_NAME);
     }
 
     private function handle_unlink(): void
@@ -247,7 +374,7 @@ class Discord_Role_Sync
 
         $this->discord()->forget($user_id);
 
-        wp_redirect("/" . self::PAGE_NAME);
+        wp_redirect($this->root_url());
         exit;
     }
 
@@ -279,12 +406,13 @@ class Discord_Role_Sync
 
             $this->user_metadata_provider->user_changed($user_id);
             $this->flush_updates();
+
+            wp_redirect($this->action_url("link"));
+            exit;
         } catch (Exception $ex) {
             wp_trigger_error(__METHOD__, "Failed to authorize with discord: " . $ex->getMessage());
+            wp_redirect($this->root_url());
         }
-
-        wp_redirect("/" . self::PAGE_NAME . "/link");
-        exit;
     }
 
     /**
@@ -315,20 +443,4 @@ class Discord_Role_Sync
             }
         }
     }
-
-    private function discord(): Discord\Client
-    {
-        if ($this->discord == null) {
-            $this->discord = new Discord\Client(
-                get_option(self::DISCORD_CLIENT_ID_KEY),
-                get_option(self::DISCORD_CLIENT_SECRET_KEY),
-                get_option(self::DISCORD_BOT_TOKEN_KEY),
-                site_url(sprintf("/%s/callback", self::PAGE_NAME)),
-                new User_Meta_Token_Store()
-            );
-        }
-        return $this->discord;
-    }
-
-
 }
