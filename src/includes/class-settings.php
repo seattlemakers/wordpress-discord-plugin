@@ -103,6 +103,9 @@ class Settings
                         submit_button();
                         ?>
                     </form>
+                    <h2>Connect Bot to Server</h2>
+                    <p>After configuring credentials, grant the bot the right permissions on Discord:</p>
+                    <p><a href="<?php printf("https://discord.com/oauth2/authorize?client_id=%s&scope=bot&permissions=402653185&guild_id=%s", $this->discord_client_id(), $this->discord_server_id()) ?>">Add to server</a></p>
                     <h2>Register Role Connection Metadata</h2>
                     <p>As a one-time setup, after configuring credentials, register metadata with Discord to link SM
                         roles with Discord roles:</p>
@@ -137,6 +140,16 @@ class Settings
         );
     }
 
+    public function discord_client_id()
+    {
+        return get_option(self::DISCORD_CLIENT_ID_KEY);
+    }
+
+    public function discord_server_id()
+    {
+        return get_option(self::DISCORD_SERVER_ID_KEY);
+    }
+
     private function is_configured(): bool
     {
         $options = [
@@ -152,16 +165,6 @@ class Settings
         }
 
         return true;
-    }
-
-    public function discord_server_id()
-    {
-        return get_option(self::DISCORD_SERVER_ID_KEY);
-    }
-
-    public function discord_client_id()
-    {
-        return get_option(self::DISCORD_CLIENT_ID_KEY);
     }
 
     public function discord_client_secret()
