@@ -1,1 +1,1 @@
-    or <a href="/sign-up">create a new account</a>.<p>
+You'll need a Seattle Makers account to join our Discord server. <a href="/account">Log in</a> or <a href="/sign-up">create a new account</a> to get started.<p>
