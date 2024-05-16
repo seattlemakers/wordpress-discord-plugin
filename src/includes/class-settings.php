@@ -11,6 +11,7 @@ class Settings
     public const DISCORD_CLIENT_ID_KEY = 'discord_client_id';
     public const DISCORD_CLIENT_SECRET_KEY = 'discord_client_secret';
     public const DISCORD_BOT_TOKEN_KEY = 'discord_bot_token';
+    public const DISCORD_ROLES_CHANNEL_ID_KEY = 'discord_roles_channel_id';
     private Closure $register_metadata;
 
     public function __construct(Closure $register_metadata)
@@ -83,6 +84,27 @@ class Settings
             'discord-settings',
             'discord_credentials'
         );
+
+        add_settings_section(
+            'discord_channels',
+            'Channels',
+            function () {
+                echo '<p>Configure channels for discord role sync onboarding</p>';
+            },
+            'discord-settings'
+        );
+
+        register_setting("discord_channels", self::DISCORD_ROLES_CHANNEL_ID_KEY);
+        add_settings_field(
+            self::DISCORD_ROLES_CHANNEL_ID_KEY,
+            'Discord Roles Channel ID',
+            function () {
+                $setting = get_option(self::DISCORD_ROLES_CHANNEL_ID_KEY);
+                echo '<input type="text" name="' . self::DISCORD_ROLES_CHANNEL_ID_KEY . '" value="' . (isset($setting) ? esc_attr($setting) : '') . '">';
+            },
+            'discord-settings',
+            'discord_channels'
+        );
     }
 
     public function admin_menu(): void
@@ -99,6 +121,7 @@ class Settings
                     <form action="options.php" method="POST">
                         <?php
                         settings_fields('discord_credentials');
+                        settings_fields('discord_channels');
                         do_settings_sections('discord-settings');
                         submit_button();
                         ?>
@@ -175,6 +198,11 @@ class Settings
     public function discord_bot_token()
     {
         return get_option(self::DISCORD_BOT_TOKEN_KEY);
+    }
+
+    public function discord_roles_channel_id()
+    {
+        return get_option(self::DISCORD_ROLES_CHANNEL_ID_KEY);
     }
 
 }

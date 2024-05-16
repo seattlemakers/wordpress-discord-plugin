@@ -189,6 +189,20 @@ class Client
         return json_decode($response);
     }
 
+    public function get_roles($server_id)
+    {
+        $response = $this->request(
+            'GET', sprintf("/guilds/%s/roles", $server_id),
+            headers: ['Authorization' => 'Bot ' . $this->discord_bot_token]
+        );
+
+        if (!$response) {
+            return null;
+        }
+
+        return json_decode($response);
+    }
+
     public function register_metadata(array $metadata)
     {
         $response = $this->request(

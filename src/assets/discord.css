@@ -1,0 +1,73 @@
+@charset "UTF-8";
+
+@media (width < 768px) {
+    .discord-steps {
+        display: flex;
+        flex-direction: column;
+    }
+}
+
+@media (width >= 768px) {
+    .discord-steps {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: 1fr;
+    }
+}
+
+.discord-steps {
+    counter-reset: step-counter;
+}
+
+.discord-steps .title::before {
+    counter-increment: step-counter;
+    content: counter(step-counter);
+    border: 3px solid var(--wp--preset--color--primary-1);
+    display: inline-block;
+    width: 1em;
+    text-align: center;
+    border-radius: 1em;
+    margin-right: 0.25em;
+}
+
+.discord-steps .step {
+    display: flex;
+    flex-direction: column;
+    border-radius: 0.5em;
+    box-shadow: var(--wp--preset--shadow--natural);
+
+    margin: 1em;
+    padding: 1em;
+}
+
+.discord-steps .step.active {
+    background-color: var(--wp--preset--color--primary-3);
+}
+
+.discord-steps .step.done {
+    background-color: var(--wp--preset--color--primary-1);
+    color: white;
+}
+
+.discord-steps .step.done h3::after {
+    content: " ✅"
+}
+
+.discord-steps .actions {
+    flex-grow: 1;
+    display: flex;
+    justify-content: space-evenly;
+    align-items: center;
+}
+
+.discord-steps .roles {
+    list-style: none;
+}
+
+.discord-steps .claimed::before {
+    content: " ✅ "
+}
+
+.discord-steps .unclaimed::before {
+    content: " ❌ "
+}

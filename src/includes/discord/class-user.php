@@ -28,9 +28,9 @@ class User
 
     public function __construct(stdClass $data)
     {
-        $this->id = $data->id ?? null;
-        $this->username = $data->username ?? null;
-        $this->discriminator = $data->discriminator ?? null;
+        $this->id = $data->id;
+        $this->username = $data->username;
+        $this->discriminator = $data->discriminator;
         $this->global_name = $data->global_name ?? null;
         $this->avatar = $data->avatar ?? null;
         $this->bot = $data->bot ?? null;

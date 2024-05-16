@@ -3,6 +3,8 @@
 namespace SeattleMakers;
 
 use Exception;
+use SeattleMakers\Discord\OAuth_URL;
+use SeattleMakers\Discord\User;
 use SeattleMakers\Discord\User_Metadata;
 use WP_User;
 
@@ -40,6 +42,7 @@ class Discord_Role_Sync
         add_action('template_redirect', [$this, 'handle_discord_action']);
 
         add_shortcode('discord_link', [$this, 'render_discord_link']);
+        add_shortcode('discord_test', [$this, 'render_discord_test']);
 
         add_action('wp_footer', [$this, 'flush_updates']);
         add_action('admin_footer', [$this, 'flush_updates']);
@@ -134,26 +137,136 @@ class Discord_Role_Sync
         return $vars;
     }
 
+    public function render_discord_test(): string
+    {
+        wp_enqueue_style("discord", plugins_url("assets/discord.css", $this->plugin_file));
+
+        if (!is_super_admin()) {
+            return $this->render_template("discord-link-logged-out", []);
+        }
+
+        $user = wp_get_current_user();
+        $nick = self::nick_for($user);
+        $server_id = $this->settings->discord_server_id();
+        $roles_channel_id = $this->settings->discord_roles_channel_id();
+
+        $discord_user = $this->discord()->get_user($user->ID);
+        $membership = $this->discord()->get_membership($discord_user->id, $server_id);
+
+        $roles = new Roles_View(
+            $this->discord()->get_roles($server_id),
+            $this->user_metadata_provider->get_metadata($user->ID)->to_list(),
+        );
+
+        $all_roles = [new \stdClass(), new \stdClass(), new \stdClass(), new \stdClass(), new \stdClass()];
+        foreach ($all_roles as $i=>$role) {
+            $role->id = $i;
+            $role->name = "Role #" . $i;
+        }
+
+        $roles = new Roles_View($all_roles, [
+            "Role #0",
+            "Role #2",
+            "Role #4",
+        ]);
+
+        $output = "<h1>Logged out</h1>";
+
+        $output = $output . $this->render_template("discord-link-logged-out");
+        $output = $output . "<hr/>";
+
+        $output = $output . "<h1>Logged in, not connected, no roles</h1>";
+        $output = $output . $this->render_template("discord-link-disconnected", [
+                "oauth" => new OAuth_URL("none", "#"),
+                "nick" => $nick,
+                "roles" => new Roles_View([], []),
+            ]);
+        $output = $output . "<hr/>";
+        $output = $output . "<h1>Logged in, not connected, some roles</h1>";
+        $output = $output . $this->render_template("discord-link-disconnected", [
+                "oauth" => new OAuth_URL("none", "#"),
+                "nick" => $nick,
+                "roles" => $roles,
+            ]);
+        $output = $output . "<hr/>";
+
+        $output = $output . "<h1>Logged in, connected, not in server</h1>";
+        $output = $output . $this->render_template("discord-link-connected", [
+                'user' => $discord_user,
+                'membership' => null,
+                'server_id' => $server_id,
+                'roles_channel_id' => $roles_channel_id,
+                'nick' => $nick,
+                'roles' => $roles,
+            ]);
+        $output = $output . "<hr/>";
+
+        $output = $output . "<h1>Logged in, connected, in server, outstanding roles</h1>";
+        $roles->set_claimed_roles([2]);
+        $output = $output . $this->render_template("discord-link-connected", [
+                'user' => $discord_user,
+                'membership' => $membership,
+                'server_id' => $server_id,
+                'roles_channel_id' => $roles_channel_id,
+                'nick' => $nick,
+                'roles' => $roles,
+            ]);
+
+        $output = $output . "<h1>Logged in, connected, in server, all roles</h1>";
+        $roles->set_claimed_roles([0, 2, 4]);
+        $output = $output . $this->render_template("discord-link-connected", [
+                'user' => $discord_user,
+                'membership' => $membership,
+                'server_id' => $server_id,
+                'roles_channel_id' => $roles_channel_id,
+                'nick' => $nick,
+                'roles' => $roles,
+            ]);
+
+        $output = $output . "<h1>Logged in, connected, in server, no roles</h1>";
+        $roles->set_claimed_roles([0, 2, 4]);
+        $output = $output . $this->render_template("discord-link-connected", [
+                'user' => $discord_user,
+                'membership' => $membership,
+                'server_id' => $server_id,
+                'roles_channel_id' => $roles_channel_id,
+                'nick' => $nick,
+                "roles" => new Roles_View([], []),
+            ]);
+
+        $output = $output . "<hr/>";
+
+        return $output;
+    }
+
     public function render_discord_link(): string|bool
     {
+        wp_enqueue_style("discord", plugins_url("assets/discord.css", $this->plugin_file));
+
         if (!is_user_logged_in()) {
             return $this->render_template("discord-link-logged-out", []);
         }
 
         $user = wp_get_current_user();
         $nick = self::nick_for($user);
-        $roles = $this->user_metadata_provider->get_metadata($user->ID)->to_list();
+        $server_id = $this->settings->discord_server_id();
+        $roles = new Roles_View(
+            $this->discord()->get_roles($server_id),
+            $this->user_metadata_provider->get_metadata($user->ID)->to_list(),
+        );
 
         try {
-            $server_id = $this->settings->discord_server_id();
-
             $discord_user = $this->discord()->get_user($user->ID);
             $membership = $this->discord()->get_membership($discord_user->id, $server_id);
+            if (isset($membership)) {
+                $roles->set_claimed_roles($membership->roles);
+            }
 
             return $this->render_template("discord-link-connected", [
                 'user' => $discord_user,
                 'membership' => $membership,
                 'server_id' => $server_id,
+                'roles_channel_id' => $this->settings->discord_roles_channel_id(),
                 'nick' => $nick,
                 'roles' => $roles,
             ]);
