@@ -248,6 +248,10 @@ class Discord_Role_Sync
         }
 
         $user = wp_get_current_user();
+        if(is_super_admin($user->ID) && isset($_REQUEST["impersonate_user"])) {
+            $user = get_user_by("id", $_REQUEST["impersonate_user"]);
+        }
+
         $nick = self::nick_for($user);
         $server_id = $this->settings->discord_server_id();
         $roles = new Roles_View(
